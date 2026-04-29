@@ -43,7 +43,7 @@ class WasenderWebhookTest extends TestCase
         ]);
 
         $response = $this
-            ->withHeader('X-Webhook-Secret', 'wrong-secret')
+            ->withHeader('X-Webhook-Signature', 'wrong-secret')
             ->postJson('/api/wasender/webhook/'.$product->session_id, $this->payload($messageId));
 
         $response->assertOk();
@@ -65,14 +65,14 @@ class WasenderWebhookTest extends TestCase
         ]);
 
         $response = $this
-            ->withHeader('X-Webhook-Secret', 'correct-secret')
+            ->withHeader('X-Webhook-Signature', 'correct-secret')
             ->postJson('/api/wasender/webhook/'.$product->session_id, $this->payload($messageId));
 
         $response->assertOk();
         Queue::assertPushed(ProcessIncomingMessageJob::class, 1);
 
         $duplicateResponse = $this
-            ->withHeader('X-Webhook-Secret', 'correct-secret')
+            ->withHeader('X-Webhook-Signature', 'correct-secret')
             ->postJson('/api/wasender/webhook/'.$product->session_id, $this->payload($messageId));
 
         $duplicateResponse->assertOk();

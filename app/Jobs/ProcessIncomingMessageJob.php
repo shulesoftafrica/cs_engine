@@ -8,6 +8,7 @@ use App\Exceptions\AiProcessingException;
 use App\Exceptions\ProductApiException;
 use App\Exceptions\WasenderDeliveryException;
 use App\Models\InteractionLog;
+use App\Models\User;
 use App\Services\KnowledgeBaseService;
 use App\Services\ProductResolverService;
 use App\Services\UserIdentificationService;
@@ -54,6 +55,11 @@ class ProcessIncomingMessageJob implements ShouldQueue
 
         try {
             $identity = $userIdentificationService->identify($product, $this->senderPhone);
+            Log::info('User identification completed.', [
+                'product_id' => $product->id,
+                'message_id' => $this->wasenderMessageId,
+                'identified' => $identity !== null,
+            ]);
             $detectedLanguage = $this->detectLanguage($this->messageText);
 
             if ($identity === null) {
@@ -73,6 +79,12 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 );
 
                 return;
+            }
+
+            $localUser = data_get($identity, 'local_user');
+
+            if (! $localUser instanceof User) {
+                throw new ProductApiException('Local user identity could not be resolved.');
             }
 
             $intent = $this->classifyIntent($this->messageText);
@@ -143,6 +155,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 permissions: (array) ($identity['permissions'] ?? []),
                 language: $detectedLanguage,
                 message: $this->messageText,
+                localUser: $localUser,
             );
 
             $wasenderSenderService->sendText(
@@ -285,6 +298,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
         array $permissions,
         string $language,
         string $message,
+        User $localUser,
     ): string {
         try {
             $response = (new SupportResponseAgent(
@@ -293,7 +307,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 kbContent: $kbContent,
                 permissions: $permissions,
                 language: $language,
-            ))->prompt($message);
+            ))->continueLastConversation($localUser)->prompt($message);
 
             return $response->text;
         } catch (Throwable $throwable) {

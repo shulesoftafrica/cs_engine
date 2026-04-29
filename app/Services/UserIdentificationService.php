@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Exceptions\ProductApiException;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Throwable;
 
 class UserIdentificationService
@@ -15,7 +17,7 @@ class UserIdentificationService
     {
         $cacheKey = sprintf('cs:user:%d:%s', $product->id, $phoneNumber);
 
-        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($product, $phoneNumber) {
+        $identity = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($product, $phoneNumber) {
             $config = (array) $product->config;
             $apiUrl = (string) Arr::get($config, 'api_url', '');
 
@@ -55,7 +57,7 @@ class UserIdentificationService
             $payload = $response->json();
             $user = Arr::get($payload, 'user');
 
-            if (! is_array($user) || $user === [] || Arr::get($user, 'id') === null) {
+            if (!is_null($user)) {
                 return null;
             }
 
@@ -64,5 +66,45 @@ class UserIdentificationService
                 'permissions' => array_keys((array) Arr::get($payload, 'permissions', [])),
             ];
         });
+
+        if ($identity === null) {
+            return null;
+        }
+
+        $localUser = $this->findOrCreateLocalUser(
+            phoneNumber: $phoneNumber,
+            name: (string) Arr::get($identity, 'user.name', 'Customer'),
+        );
+
+        $identity['local_user'] = $localUser;
+
+        return $identity;
+    }
+
+    private function findOrCreateLocalUser(string $phoneNumber, string $name): User
+    {
+        $user = User::query()->where('phone', $phoneNumber)->first();
+        
+        if ($user !== null) {
+            if ($name !== '' && $user->name !== $name) {
+                $user->forceFill(['name' => $name])->save();
+            }
+
+            return $user;
+        }
+
+        return User::query()->create([
+            'name' => $name !== '' ? $name : 'Customer',
+            'email' => $phoneNumber.'@shulesoft.africa',
+            'phone' => $phoneNumber,
+            'password' => Str::random(40),
+        ]);
+    }
+
+    private function normalizePhone(string $phoneNumber): string
+    {
+        $normalized = preg_replace('/\D+/', '', $phoneNumber) ?? '';
+
+        return $normalized !== '' ? $normalized : $phoneNumber;
     }
 }

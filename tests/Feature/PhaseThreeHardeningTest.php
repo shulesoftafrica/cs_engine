@@ -7,11 +7,14 @@ use App\Exceptions\AiProcessingException;
 use App\Exceptions\ProductApiException;
 use App\Exceptions\WasenderDeliveryException;
 use App\Jobs\ProcessIncomingMessageJob;
+use App\Models\KnowledgeBase;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\UserIdentificationService;
 use App\Services\WasenderSenderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Embeddings;
 use Tests\TestCase;
 
 class PhaseThreeHardeningTest extends TestCase
@@ -101,6 +104,75 @@ class PhaseThreeHardeningTest extends TestCase
             messageText: 'How do I view my balance?',
             wasenderMessageId: 'msg-102',
         );
+    }
+
+    public function test_identified_user_is_created_in_local_users_table_by_phone(): void
+    {
+        Http::fake([
+            'https://product.test/user' => Http::response([
+                'user' => ['id' => 10, 'name' => 'John Local'],
+                'permissions' => ['view_balance' => 'Can view balance'],
+            ]),
+        ]);
+
+        $product = $this->makeProduct();
+
+        $identity = app(UserIdentificationService::class)->identify($product, '+255700123456');
+
+        $this->assertNotNull($identity);
+        $this->assertDatabaseHas('users', [
+            'phone' => '255700123456',
+            'name' => 'John Local',
+            'email' => '255700123456@cs-engine.local',
+        ]);
+    }
+
+    public function test_support_agent_prompt_creates_conversation_records_for_local_user(): void
+    {
+        $vector = array_fill(0, 1536, 0.01);
+
+        Http::fake([
+            'https://product.test/user' => Http::response([
+                'user' => ['id' => 11, 'name' => 'Conversation User'],
+                'permissions' => ['view_balance' => 'Can view balance'],
+            ]),
+            'https://www.wasenderapi.com/api/send-message' => Http::response(['ok' => true]),
+        ]);
+
+        Embeddings::fake([
+            [$vector],
+        ]);
+
+        IntentClassifierAgent::fake([
+            ['intent' => 'SUPPORT'],
+        ]);
+
+        $product = $this->makeProduct();
+
+        KnowledgeBase::query()->create([
+            'product_id' => $product->id,
+            'content' => 'Use the balance section to view your account balance.',
+            'permissions' => ['view_balance'],
+            'embedding_vector' => $vector,
+        ]);
+
+        ProcessIncomingMessageJob::dispatchSync(
+            productId: $product->id,
+            senderPhone: '255700123456',
+            messageText: 'How can I view my balance?',
+            wasenderMessageId: 'msg-103',
+        );
+
+        $localUser = User::query()->where('phone', '255700123456')->firstOrFail();
+
+        $this->assertDatabaseHas('agent_conversations', [
+            'user_id' => $localUser->id,
+        ]);
+
+        $this->assertDatabaseHas('agent_conversation_messages', [
+            'user_id' => $localUser->id,
+            'agent' => 'App\\Ai\\Agents\\SupportResponseAgent',
+        ]);
     }
 
     private function makeProduct(): Product
