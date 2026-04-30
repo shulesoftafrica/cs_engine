@@ -12,15 +12,12 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\UserIdentificationService;
 use App\Services\WasenderSenderService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Tests\TestCase;
 
 class PhaseThreeHardeningTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_user_identification_throws_for_product_api_server_errors(): void
     {
         Http::fake([

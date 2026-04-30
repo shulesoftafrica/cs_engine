@@ -7,15 +7,12 @@ use App\Ai\Agents\SupportResponseAgent;
 use App\Jobs\ProcessIncomingMessageJob;
 use App\Models\KnowledgeBase;
 use App\Models\Product;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Tests\TestCase;
 
 class PhaseTwoAiPipelineTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_it_sends_the_phase_one_fallback_for_non_support_intents(): void
     {
         Http::fake([

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\KnowledgeBase;
 use App\Models\Product;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Embeddings;
@@ -12,8 +11,6 @@ use Tests\TestCase;
 
 class KnowledgeBaseCrudTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_it_creates_a_knowledge_base_and_generates_embedding_vector(): void
     {
         $product = Product::factory()->create();

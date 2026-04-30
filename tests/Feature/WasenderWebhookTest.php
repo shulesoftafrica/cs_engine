@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Jobs\ProcessIncomingMessageJob;
 use App\Models\Product;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -12,8 +11,6 @@ use Tests\TestCase;
 
 class WasenderWebhookTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

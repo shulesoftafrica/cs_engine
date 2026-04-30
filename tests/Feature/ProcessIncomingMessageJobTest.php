@@ -5,14 +5,11 @@ namespace Tests\Feature;
 use App\Jobs\ProcessIncomingMessageJob;
 use App\Models\InteractionLog;
 use App\Models\Product;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ProcessIncomingMessageJobTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_it_sends_the_unregistered_message_when_user_lookup_fails(): void
     {
         Http::fake([
