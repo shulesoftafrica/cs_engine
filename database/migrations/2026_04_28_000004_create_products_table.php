@@ -16,6 +16,7 @@ return new class extends Migration
             $table->text('wasender_api_key');
             $table->text('webhook_secret');
             $table->json('config');
+            $table->json('permissions')->nullable();
             $table->string('support_email')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();

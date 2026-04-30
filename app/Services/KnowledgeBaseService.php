@@ -3,12 +3,17 @@
 namespace App\Services;
 
 use App\Models\KnowledgeBase;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class KnowledgeBaseService
 {
-    public function resolveAnswerability(int $productId, string $userMessage, array $userPermissions): array
+    public function resolveAnswerability(
+        int $productId,
+        string $userMessage,
+        array $userPermissions,
+        array $requiredPermissions,
+    ): array
     {
         // Step 1: Check if any KB articles exist for this product at all.
         $anyExists = KnowledgeBase::query()
@@ -44,9 +49,9 @@ class KnowledgeBaseService
         }
 
         // Step 3: Apply permission filter on the retrieved candidates.
-        $allowed = $candidates->filter(function (KnowledgeBase $article) use ($userPermissions): bool {
-            return $this->isAllowed($article, $userPermissions);
-        })->values();
+        $allowed = $this->isAllowed($userPermissions, $requiredPermissions)
+            ? $candidates->values()
+            : collect();
 
         if ($allowed->isNotEmpty()) {
             return [
@@ -61,19 +66,24 @@ class KnowledgeBaseService
         return [
             'status' => 'forbidden_match',
             'articles' => collect(),
-            'required_permissions' => array_keys((array) ($forbidden?->permissions ?? [])),
+            'required_permissions' => array_values($requiredPermissions),
         ];
     }
 
 
 
-    private function isAllowed(KnowledgeBase $article, array $userPermissions)
+    private function isAllowed(array $userPermissions, array $requiredPermissions): bool
     {
-        $requiredPermissions = array_keys((array) ($article->permissions ?? []));
+        $requiredPermissions = array_values(array_filter($requiredPermissions, fn ($permission) => is_string($permission) && $permission !== ''));
 
         if ($requiredPermissions === []) {
             return true;
         }
-        return array_diff($userPermissions, $requiredPermissions) === [];
+        Log::info('Checking permissions for KB access.', [
+            'user_permissions' => $userPermissions,
+            'required_permissions' => $requiredPermissions,
+        ]);
+
+        return array_diff($requiredPermissions, $userPermissions) === [];
     }
 }

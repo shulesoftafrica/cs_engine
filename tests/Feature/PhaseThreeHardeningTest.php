@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Ai\Agents\IntentClassifierAgent;
+use App\Ai\Agents\PermissionCheckAgent;
 use App\Exceptions\AiProcessingException;
 use App\Exceptions\ProductApiException;
 use App\Exceptions\WasenderDeliveryException;
@@ -143,6 +144,9 @@ class PhaseThreeHardeningTest extends TestCase
         IntentClassifierAgent::fake([
             ['intent' => 'SUPPORT'],
         ]);
+        PermissionCheckAgent::fake([
+            ['required_permissions' => ['view_balance']],
+        ]);
 
         $product = $this->makeProduct();
 
@@ -184,6 +188,11 @@ class PhaseThreeHardeningTest extends TestCase
                 'api_url' => 'https://product.test/user',
                 'method' => 'POST',
                 'auth_key' => 'product-token',
+            ],
+            'permissions' => [
+                'view_balance' => 'Can view balance',
+                'add_student' => 'Add student',
+                'edit_student' => 'Edit student',
             ],
             'support_email' => 'support@example.com',
         ]);

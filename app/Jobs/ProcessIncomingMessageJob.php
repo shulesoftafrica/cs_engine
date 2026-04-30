@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Ai\Agents\IntentClassifierAgent;
+use App\Ai\Agents\PermissionCheckAgent;
 use App\Ai\Agents\SupportResponseAgent;
 use App\Exceptions\AiProcessingException;
 use App\Exceptions\ProductApiException;
@@ -15,7 +16,6 @@ use App\Services\UserIdentificationService;
 use App\Services\WasenderSenderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -114,10 +114,17 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 return;
             }
 
+            $productPermissions = (array) ($product->permissions ?? []);
+            $requiredPermissions = $this->detectRequiredPermissions(
+                message: $this->messageText,
+                productPermissions: $productPermissions,
+            );
+
             $kbResolution = $knowledgeBaseService->resolveAnswerability(
                 productId: $product->id,
                 userMessage: $this->messageText,
                 userPermissions: (array) ($identity['permissions'] ?? []),
+                requiredPermissions: $requiredPermissions,
             );
             Log::info('Knowledge base search completed.', [
                 'product_id' => $product->id,
@@ -126,7 +133,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
             ]);
             $status = (string) ($kbResolution['status'] ?? 'no_match');
             $articles = $kbResolution['articles'] ?? collect();
-            $requiredPermissions =  Arr::get($kbResolution['required_permissions'], 'permissions', []);
+            $requiredPermissions = (array) ($kbResolution['required_permissions'] ?? []);
             
 
             if ($status === 'forbidden_match') {
@@ -317,6 +324,41 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 'exception' => $throwable,
             ]);
             throw new AiProcessingException('Intent classification failed.', previous: $throwable);
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $productPermissions
+     * @return array<int, string>
+     */
+    private function detectRequiredPermissions(string $message, array $productPermissions): array
+    {
+        $permissionKeys = array_values(array_filter(array_keys($productPermissions), fn ($value) => is_string($value) && $value !== ''));
+
+        if ($permissionKeys === []) {
+            return [];
+        }
+
+        try {
+            $response = (new PermissionCheckAgent($productPermissions))->prompt($message);
+            $requiredPermissions = array_values(array_filter(
+                (array) ($response['required_permissions'] ?? []),
+                fn ($value) => is_string($value) && in_array($value, $permissionKeys, true),
+            ));
+            Log::info('Permission detection completed.', [
+                'message' => $message,
+                'product_permissions' => $productPermissions,
+                'required_permissions' => $requiredPermissions,
+            ]);
+
+            return array_values(array_unique($requiredPermissions));
+        } catch (Throwable $throwable) {
+            Log::error('Permission detection failed.', [
+                'message' => $message,
+                'exception' => $throwable,
+            ]);
+
+            throw new AiProcessingException('Permission detection failed.', previous: $throwable);
         }
     }
 

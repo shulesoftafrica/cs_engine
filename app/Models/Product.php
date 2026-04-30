@@ -19,6 +19,7 @@ class Product extends Model
         'wasender_api_key',
         'webhook_secret',
         'config',
+        'permissions',
         'support_email',
         'is_active',
     ];
@@ -27,6 +28,7 @@ class Product extends Model
     {
         return [
             'config' => 'array',
+            'permissions' => 'array',
             'is_active' => 'boolean',
         ];
     }

@@ -35,6 +35,7 @@ Strict rules:
 - If the knowledge base content is relevant, answer using only that information.
 - If the knowledge base content is partially relevant, provide only the relevant portion and clearly say the information is incomplete.
 - If the knowledge base content is NOT relevant to the user's question:
+  - Do NOT MENTION the knowledge base at all, 
   - DO NOT mention the retrieved content.
   - DO NOT summarize the retrieved content.
   - DO NOT explain unrelated topics found in the knowledge base.
