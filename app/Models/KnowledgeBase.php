@@ -14,7 +14,6 @@ class KnowledgeBase extends Model
     protected $fillable = [
         'product_id',
         'content',
-        'permissions',
         'document_key',
         'chunk_index',
         'embedding_vector',
@@ -23,7 +22,6 @@ class KnowledgeBase extends Model
     protected function casts(): array
     {
         return [
-            'permissions' => 'array',
             'chunk_index' => 'integer',
             'embedding_vector' => 'array',
         ];

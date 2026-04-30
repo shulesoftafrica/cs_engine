@@ -39,7 +39,6 @@ class KnowledgeBaseController extends Controller
         $knowledgeBase = KnowledgeBase::query()->create([
             'product_id' => $validated['product_id'],
             'content' => $content,
-            'permissions' => $validated['permissions'] ?? null,
             'document_key' => null,
             'chunk_index' => 0,
             'embedding_vector' => Str::of($content)->toEmbeddings(),

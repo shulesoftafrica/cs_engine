@@ -16,8 +16,6 @@ class UpdateKnowledgeBaseRequest extends FormRequest
         return [
             'product_id' => ['sometimes', 'integer', 'exists:products,id'],
             'content' => ['sometimes', 'file', 'mimes:txt,pdf,doc,docx'],
-            'permissions' => ['sometimes', 'nullable', 'array'],
-            'permissions.*' => ['string'],
         ];
     }
 }

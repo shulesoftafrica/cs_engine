@@ -24,13 +24,11 @@ class KnowledgeBaseCrudTest extends TestCase
         $response = $this->post('/api/knowledge-bases', [
             'product_id' => $product->id,
             'content' => $file,
-            'permissions' => ['view_balance'],
         ], ['Accept' => 'application/json']);
 
         $response->assertCreated()
             ->assertJsonPath('product_id', $product->id)
-            ->assertJsonPath('content', 'How to view balance in the dashboard')
-            ->assertJsonPath('permissions.0', 'view_balance');
+            ->assertJsonPath('content', 'How to view balance in the dashboard');
 
         $knowledgeBase = KnowledgeBase::query()->firstOrFail();
 
@@ -124,7 +122,7 @@ class KnowledgeBaseCrudTest extends TestCase
             ->assertJsonPath('content', $knowledgeBase->content);
     }
 
-    public function test_it_updates_content_permissions_and_regenerates_embedding_vector(): void
+    public function test_it_updates_content_and_regenerates_embedding_vector(): void
     {
         $knowledgeBase = KnowledgeBase::factory()->create([
             'permissions' => ['old_permission'],
@@ -142,18 +140,16 @@ class KnowledgeBaseCrudTest extends TestCase
         $response = $this->post('/api/knowledge-bases/'.$knowledgeBase->id, [
             '_method' => 'PATCH',
             'content' => $file,
-            'permissions' => ['view_balance', 'make_payment'],
         ], ['Accept' => 'application/json']);
 
         $response->assertOk()
-            ->assertJsonPath('content', 'New support article content')
-            ->assertJsonPath('permissions.0', 'view_balance')
-            ->assertJsonPath('permissions.1', 'make_payment');
+            ->assertJsonPath('content', 'New support article content');
 
         $knowledgeBase->refresh();
 
         $this->assertSame($newVector, $knowledgeBase->embedding_vector);
         $this->assertNull($knowledgeBase->document_key);
+        $this->assertSame(['old_permission'], $knowledgeBase->permissions);
     }
 
     public function test_it_updates_a_long_document_and_keeps_one_record(): void
