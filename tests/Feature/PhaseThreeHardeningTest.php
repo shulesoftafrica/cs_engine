@@ -121,7 +121,7 @@ class PhaseThreeHardeningTest extends TestCase
 
         $this->assertNotNull($identity);
         $this->assertDatabaseHas('users', [
-            'phone' => '255700123456',
+            'phone' => '+255700123456',
             'name' => 'John Local',
             'email' => '255700123456@cs-engine.local',
         ]);
@@ -163,7 +163,7 @@ class PhaseThreeHardeningTest extends TestCase
             wasenderMessageId: 'msg-103',
         );
 
-        $localUser = User::query()->where('phone', '255700123456')->firstOrFail();
+        $localUser = User::query()->where('phone', '+255700123456')->firstOrFail();
 
         $this->assertDatabaseHas('agent_conversations', [
             'user_id' => $localUser->id,

@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -15,9 +16,10 @@ class UserIdentificationService
 {
     public function identify(Product $product, string $phoneNumber): ?array
     {
-        $cacheKey = sprintf('cs:user:%d:%s', $product->id, $phoneNumber);
+        $normalizedPhone = $this->normalizePhone($phoneNumber);
+        $cacheKey = sprintf('cs:user:%d:%s', $product->id, $normalizedPhone);
 
-        $identity = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($product, $phoneNumber) {
+        $identity = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($product, $normalizedPhone) {
             $config = (array) $product->config;
             $apiUrl = (string) Arr::get($config, 'api_url', '');
 
@@ -40,7 +42,7 @@ class UserIdentificationService
 
             try {
                 $response = $request->{$method}($apiUrl, [
-                    'phone' => $phoneNumber,
+                    'phone' => $normalizedPhone,
                 ]);
             } catch (Throwable $throwable) {
                 throw new ProductApiException('The product API request failed.', previous: $throwable);
@@ -57,23 +59,27 @@ class UserIdentificationService
             $payload = $response->json();
             $user = Arr::get($payload, 'user');
 
-            if (!is_null($user)) {
+            if (! is_array($user) || $user === []) {
                 return null;
             }
 
+            $permissions = Arr::get($payload, 'permissions', []);
+            if (empty($permissions)) {
+                $permissions = [];
+            }
             return [
                 'user' => $user,
-                'permissions' => array_keys((array) Arr::get($payload, 'permissions', [])),
+                'permissions' => array_keys((array) $permissions),
             ];
         });
-
         if ($identity === null) {
             return null;
         }
 
+        $userData = Arr::get($identity, 'user', []);
+
         $localUser = $this->findOrCreateLocalUser(
-            phoneNumber: $phoneNumber,
-            name: (string) Arr::get($identity, 'user.name', 'Customer'),
+            $userData
         );
 
         $identity['local_user'] = $localUser;
@@ -81,13 +87,29 @@ class UserIdentificationService
         return $identity;
     }
 
-    private function findOrCreateLocalUser(string $phoneNumber, string $name): User
+    private function findOrCreateLocalUser(array $userData): User
     {
-        $user = User::query()->where('phone', $phoneNumber)->first();
-        
-        if ($user !== null) {
+        $phone = $userData['phone'];
+        $email = $userData['email'];
+        $name = $userData['name'];
+
+        $user = User::query()
+            ->where('phone', $phone)
+            ->first();
+
+        if (!empty($user)) {
+            $updates = [];
+
             if ($name !== '' && $user->name !== $name) {
-                $user->forceFill(['name' => $name])->save();
+                $updates['name'] = $name;
+            }
+
+            if ($user->phone !== $phone) {
+                $updates['phone'] = $phone;
+            }
+
+            if ($updates !== []) {
+                $user->forceFill($updates)->save();
             }
 
             return $user;
@@ -95,16 +117,21 @@ class UserIdentificationService
 
         return User::query()->create([
             'name' => $name !== '' ? $name : 'Customer',
-            'email' => $phoneNumber.'@shulesoft.africa',
-            'phone' => $phoneNumber,
+            'email' => $email !== '' ? $email : $name . '.shulesoft.africa',
+            'phone' => $phone,
             'password' => Str::random(40),
         ]);
     }
 
     private function normalizePhone(string $phoneNumber): string
     {
-        $normalized = preg_replace('/\D+/', '', $phoneNumber) ?? '';
+        $trimmed = trim($phoneNumber);
+        $normalized = preg_replace('/\D+/', '', $trimmed) ?? '';
 
-        return $normalized !== '' ? $normalized : $phoneNumber;
+        if ($normalized === '') {
+            return $trimmed;
+        }
+
+        return '+' . $normalized;
     }
 }

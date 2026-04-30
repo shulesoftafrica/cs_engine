@@ -144,11 +144,53 @@ class PhaseTwoAiPipelineTest extends TestCase
 
         Http::assertSent(function ($request): bool {
             return $request->url() === 'https://www.wasenderapi.com/api/send-message'
-                && $request['text'] === "I don't have info on that. Contact support@example.com.";
+                && $request['text'] === 'You do not have permission to access this information. Contact support.';
         });
 
         $this->assertDatabaseHas('interaction_logs', [
             'wasender_message_id' => 'msg-003',
+            'intent' => 'SUPPORT',
+            'was_resolved' => false,
+            'was_fallback' => true,
+        ]);
+    }
+
+    public function test_it_sends_no_match_fallback_when_no_relevant_kb_exists(): void
+    {
+        $vector = array_fill(0, 1536, 0.01);
+
+        Http::fake([
+            'https://product.test/user' => Http::response([
+                'user' => ['id' => 4, 'name' => 'Matchless User'],
+                'permissions' => ['view_balance' => 'Can view balance'],
+            ]),
+            'https://www.wasenderapi.com/api/send-message' => Http::response(['ok' => true]),
+        ]);
+
+        Embeddings::fake([
+            [$vector],
+        ]);
+        IntentClassifierAgent::fake([
+            ['intent' => 'SUPPORT'],
+        ]);
+        SupportResponseAgent::fake()->preventStrayPrompts();
+
+        $product = $this->makeProduct();
+
+        ProcessIncomingMessageJob::dispatchSync(
+            productId: $product->id,
+            senderPhone: '255700123456',
+            messageText: 'Tell me about teacher onboarding process',
+            wasenderMessageId: 'msg-004',
+        );
+
+        Http::assertSent(function ($request): bool {
+            return $request->url() === 'https://www.wasenderapi.com/api/send-message'
+                && $request['text'] === "I don't have info on that. Contact support@example.com.";
+        });
+
+        $this->assertDatabaseHas('interaction_logs', [
+            'wasender_message_id' => 'msg-004',
             'intent' => 'SUPPORT',
             'was_resolved' => false,
             'was_fallback' => true,

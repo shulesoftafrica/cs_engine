@@ -15,6 +15,7 @@ use App\Services\UserIdentificationService;
 use App\Services\WasenderSenderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -113,7 +114,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 return;
             }
 
-            $articles = $knowledgeBaseService->findBestMatch(
+            $kbResolution = $knowledgeBaseService->resolveAnswerability(
                 productId: $product->id,
                 userMessage: $this->messageText,
                 userPermissions: (array) ($identity['permissions'] ?? []),
@@ -121,9 +122,37 @@ class ProcessIncomingMessageJob implements ShouldQueue
             Log::info('Knowledge base search completed.', [
                 'product_id' => $product->id,
                 'message_id' => $this->wasenderMessageId,
-                'found_match' => $articles->isEmpty(),
+                'resolution_status' => $kbResolution,
             ]);
-            if ($articles->isEmpty()) {
+            $status = (string) ($kbResolution['status'] ?? 'no_match');
+            $articles = $kbResolution['articles'] ?? collect();
+            $requiredPermissions =  Arr::get($kbResolution['required_permissions'], 'permissions', []);
+            
+
+            if ($status === 'forbidden_match') {
+                $wasenderSenderService->sendText(
+                    product: $product,
+                    phoneNumber: $this->senderPhone,
+                    text: str_replace(
+                        ':required_permissions',
+                        implode(', ', $requiredPermissions),
+                        (string) config('cs_engine.messages.permission_denied')
+                    ),
+                );
+
+                $this->logInteraction(
+                    productId: $product->id,
+                    processingStartedAt: $startedAt,
+                    intent: $intent,
+                    detectedLanguage: $detectedLanguage,
+                    wasResolved: false,
+                    wasFallback: true,
+                );
+
+                return;
+            }
+
+            if ($status !== 'accessible_match' || $articles->isEmpty()) {
                 $wasenderSenderService->sendText(
                     product: $product,
                     phoneNumber: $this->senderPhone,
@@ -146,7 +175,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 return;
             }
             $content = $articles->pluck('content')->join("\n\n---\n\n");
-           
+
 
             $responseText = $this->generateSupportResponse(
                 productName: $product->name,
