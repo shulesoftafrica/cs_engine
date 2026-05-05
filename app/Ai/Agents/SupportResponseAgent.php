@@ -39,12 +39,12 @@ Strict rules:
   - DO NOT mention the retrieved content.
   - DO NOT summarize the retrieved content.
   - DO NOT explain unrelated topics found in the knowledge base.
-  - Politely state that the information could not be found.
-  - Suggest the next helpful action, such as contacting support or checking official documentation.
-  - If support contact information exists in the knowledge base, include it.
+  - Politely state that 'We have received your request and will get back to you within 24 hours'.
+  - Reply back to the user in the same language as the question.
+  - If support contact information exists in the product detail, include it.
 - Keep responses concise, professional, and user-friendly.
 - Respond in {$this->language}.
-- Greet the user by first name ({$this->userName}).
+- Greet the user but not mention their name.
 
 The user's permissions are: {$permissions}.
 
