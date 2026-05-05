@@ -67,7 +67,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 $wasenderSenderService->sendText(
                     product: $product,
                     phoneNumber: $this->senderPhone,
-                    text: (string) config('cs_engine.messages.unregistered'),
+                    text: $this->msg('unregistered', $detectedLanguage),
                 );
 
                 $this->logInteraction(
@@ -95,11 +95,30 @@ class ProcessIncomingMessageJob implements ShouldQueue
                 'intent' => $intent,
             ]);
 
+            if ($intent === 'GREETING') {
+                $wasenderSenderService->sendText(
+                    product: $product,
+                    phoneNumber: $this->senderPhone,
+                    text: $this->msg('greeting', $detectedLanguage),
+                );
+
+                $this->logInteraction(
+                    productId: $product->id,
+                    processingStartedAt: $startedAt,
+                    intent: $intent,
+                    detectedLanguage: $detectedLanguage,
+                    wasResolved: true,
+                    wasFallback: false,
+                );
+
+                return;
+            }
+
             if ($intent !== 'SUPPORT') {
                 $wasenderSenderService->sendText(
                     product: $product,
                     phoneNumber: $this->senderPhone,
-                    text: (string) config('cs_engine.messages.intent_fallback'),
+                    text: $this->msg('intent_fallback', $detectedLanguage),
                 );
 
                 $this->logInteraction(
@@ -143,7 +162,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                     text: str_replace(
                         ':required_permissions',
                         implode(', ', $requiredPermissions),
-                        (string) config('cs_engine.messages.permission_denied')
+                        $this->msg('permission_denied', $detectedLanguage)
                     ),
                 );
 
@@ -166,7 +185,7 @@ class ProcessIncomingMessageJob implements ShouldQueue
                     text: str_replace(
                         ':support_email',
                         $product->support_email ?: 'support',
-                        (string) config('cs_engine.messages.no_kb_match')
+                        $this->msg('no_kb_match', $detectedLanguage)
                     ),
                 );
 
@@ -241,9 +260,10 @@ class ProcessIncomingMessageJob implements ShouldQueue
             return;
         }
 
+        $lang = $this->detectLanguage($this->messageText);
         $message = match (true) {
-            $throwable instanceof ProductApiException => (string) config('cs_engine.messages.technical_issue'),
-            $throwable instanceof AiProcessingException => (string) config('cs_engine.messages.technical_issue_shortly'),
+            $throwable instanceof ProductApiException => $this->msg('technical_issue', $lang),
+            $throwable instanceof AiProcessingException => $this->msg('technical_issue_shortly', $lang),
             default => null,
         };
 
@@ -290,6 +310,11 @@ class ProcessIncomingMessageJob implements ShouldQueue
             'was_fallback' => $wasFallback,
             'processing_ms' => (int) round((microtime(true) - $processingStartedAt) * 1000),
         ]);
+    }
+
+    private function msg(string $key, string $lang): string
+    {
+        return (string) config("cs_engine.messages.{$lang}.{$key}", config("cs_engine.messages.en.{$key}", ''));
     }
 
     private function detectLanguage(string $message): string
